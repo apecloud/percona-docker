@@ -11,6 +11,9 @@ ENV OS_VER el9
 ENV FULL_PERCONA_VERSION "$PS_VERSION.$OS_VER"
 ENV FULL_PERCONA_XTRABACKUP_VERSION "$XTRABACKUP_VERSION.$OS_VER"
 
+ARG TARGETPLATFORM
+RUN echo "Building for $TARGETPLATFORM"
+
 # check repository package signature in secure way
 RUN set -ex; \
     export GNUPGHOME="$(mktemp -d)"; \
@@ -40,8 +43,15 @@ RUN groupadd -g 1001 mysql; \
     useradd -u 1001 -r -g 1001 -s /sbin/nologin \
         -c "Default Application User" mysql
 
+RUN if [ "$TARGETPLATFORM" == "linux/amd64" ]; then \
+        set -ex; curl -Lf -o /tmp/libev.rpm https://downloads.percona.com/downloads/packaging/libev-4.33-5.el9.x86_64.rpm; \
+    elif [ "$TARGETPLATFORM" == "linux/arm64" ]; then \
+        set -ex; curl -Lf -o /tmp/libev.rpm https://rpmfind.net/linux/centos-stream/9-stream/BaseOS/aarch64/os/Packages/libev-4.33-5.el9.aarch64.rpm; \
+    else \
+        echo "Unsupported platform"; exit 1; \
+    fi
+
 RUN set -ex; \
-    curl -Lf -o /tmp/libev.rpm https://downloads.percona.com/downloads/packaging/libev-4.33-5.el9.x86_64.rpm; \
     rpm -i /tmp/libev.rpm; \
     rm -rf /tmp/libev.rpm; \
     #dnf --setopt=install_weak_deps=False --best install -y \
@@ -60,7 +70,10 @@ RUN set -ex; \
 
 RUN install -d -o 1001 -g 0 -m 0775 /backup
 
+
+RUN cp -r /usr/bin/xtrabackup /xtrabackup
+
 VOLUME [ "/backup" ]
 USER 1001
-
 CMD ["/usr/bin/xtrabackup"]
+
